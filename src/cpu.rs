@@ -42,11 +42,11 @@ impl CPU {
     }
   }
 
-  fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
+  fn get_operand_address(&mut self, mode: &AddressingMode) -> u16 {
     match mode {
       AddressingMode::Immediate => self.program_counter,
       AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
-      AddressingMode::Absolute => self.med_read_u16(self.program_counter),
+      AddressingMode::Absolute => self.mem_read_u16(self.program_counter),
       AddressingMode::ZeroPage_X => {
         let pos = self.mem_read(self.program_counter);
         let addr = pos.wrapping_add(self.register_x) as u16;
@@ -61,13 +61,13 @@ impl CPU {
 
       AddressingMode::Absolute_X => {
         let base = self.mem_read_u16(self.program_counter);
-        let addr = base.wrapping_add(self.register_x) as u16;
+        let addr = base.wrapping_add(self.register_x as u16);
         addr
       }
 
       AddressingMode::Absolute_Y => {
         let base = self.mem_read_u16(self.program_counter);
-        let addr = base.wrapping_add(self.register_y) as u16;
+        let addr = base.wrapping_add(self.register_y as u16);
         addr
       }
 
@@ -78,7 +78,7 @@ impl CPU {
         let lo = self.mem_read(ptr as u16);
         let hi = self.mem_read(ptr.wrapping_add(1) as u16);
         (hi as u16) << 8 | (lo as u16)
-    
+
 
       }
 
@@ -123,18 +123,23 @@ impl CPU {
   pub fn run(&mut self) {
     // note: we move initialization of program_counter from here to load
     loop {
-      // let opscode = program[self.program_counter as usize];
-      let opscode = self.mem_read(self.program_counter);
+      let code = self.mem_read(self.program_counter);
       self.program_counter += 1;
 
-      println!("!!! running opscode: {:x}", opscode);
+      println!("!!! running opcode: {:x}", code);
       // opcodes https://www.nesdev.org/obelisk-6502-guide/reference.html
-      match opscode {
+      match code {
         0xA9 => { // LDA
-          let param =  self.mem_read(self.program_counter);
+          self.lda(&AddressingMode::Immediate);
           self.program_counter += 1;
-
-          self.lda(param);
+        }
+        0xA5 => {
+          self.lda(&AddressingMode::ZeroPage);
+          self.program_counter += 1;
+        }
+        0xAD => {
+          self.lda(&AddressingMode::Absolute);
+          self.program_counter += 2;
         }
         0xAA => self.tax(),
         // I imeplemented this thinking it was asked for by the tutorial but really
@@ -172,57 +177,10 @@ impl CPU {
     }
   }
 
-  pub fn interpret(&mut self, program: Vec<u8>) {
-    self.program_counter = 0;
+  fn lda(&mut self, mode: &AddressingMode) {
+    let addr = self.get_operand_address(mode);
+    let value = self.mem_read(addr);
 
-    loop {
-      let opscode = program[self.program_counter as usize];
-      self.program_counter += 1;
-
-      // opcodes https://www.nesdev.org/obelisk-6502-guide/reference.html
-      match opscode {
-        0xA9 => { // LDA
-          let param = program[self.program_counter as usize];
-          self.program_counter += 1;
-
-          self.lda(param);
-        }
-        0xAA => self.tax(),
-        // I imeplemented this thinking it was asked for by the tutorial but really
-        // they were loading the value of 0xc0, this may or may not be working :-)
-        0xc0 => { // CPY - Compare Y Register
-          let param = program[self.program_counter as usize];
-          self.program_counter += 1;
-
-          if self.register_y > param {
-            // set carry flag
-            self.set_carry_flag();
-          } else if self.register_y == param {
-            // set 0 flag
-            self.status = self.status | 0b0000_0010;
-          }
-
-        }
-        0xe8 => { // INX - Increment X Register
-          println!("register_x: {}", self.register_x);
-
-          if self.register_x < 0xff {
-            self.register_x = self.register_x + 1;
-          } else {
-            self.register_x = 0x00;
-          }
-
-          println!("register_x + 1: {}", self.register_x);
-
-          self.update_zero_and_negative_flags(self.register_x);
-        }
-        0x00 => return, // BRK
-        _ => todo!()
-      }
-    }
-  }
-
-  fn lda(&mut self, value: u8) {
     self.register_a = value;
     self.update_zero_and_negative_flags(self.register_a);
   }
@@ -318,7 +276,8 @@ mod test {
     assert_eq!(cpu.register_x, 10)
   }
 
-  #[test]
+  // todo - rework tests that use intepret
+  /*#[test]
   fn test_5_ops_working_together() {
     let mut cpu = CPU::new();
     // lda -> 0xc0
@@ -347,6 +306,16 @@ mod test {
     cpu.interpret(vec![0xe8, 0x00]);
 
     assert_eq!(cpu.status, 0b0000_0010);
+  }*/
+
+  #[test]
+  fn test_lda_from_memory() {
+    let mut cpu = CPU::new();
+    cpu.mem_write(0x10, 0x55);
+
+    cpu.load_and_run(vec![0xa5, 0x10, 0x00]);
+
+    assert_eq!(cpu.register_a, 0x55);
   }
 }
 
