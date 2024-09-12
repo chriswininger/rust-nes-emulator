@@ -126,7 +126,6 @@ impl CPU {
       let code = self.mem_read(self.program_counter);
       self.program_counter += 1;
 
-      println!("!!! running opcode: {:x}", code);
       // opcodes https://www.nesdev.org/obelisk-6502-guide/reference.html
       match code {
         0xA9 => { // LDA
@@ -186,7 +185,6 @@ impl CPU {
   }
 
   fn tax(&mut self) {
-    println!("!!! tax: {} to {}", self.register_a, self.register_x);
     self.register_x = self.register_a;
     self.update_zero_and_negative_flags(self.register_x);
   }
@@ -276,24 +274,25 @@ mod test {
     assert_eq!(cpu.register_x, 10)
   }
 
-  // todo - rework tests that use intepret
-  /*#[test]
+  #[test]
   fn test_5_ops_working_together() {
     let mut cpu = CPU::new();
     // lda -> 0xc0
     // assign register a to register_x (TAX)
     // Increment X - INX (0xe8)
-    // break
-    cpu.interpret(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
-
+    // break 
+    cpu.load_and_run(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
     assert_eq!(cpu.register_x, 0xc1)
   }
 
   #[test]
   fn test_inx_overflow() {
     let mut cpu = CPU::new();
+    cpu.load(vec![0xe8, 0xe8, 0x00]);
+    cpu.reset();
+
     cpu.register_x = 0xff;
-    cpu.interpret(vec![0xe8, 0xe8, 0x00]);
+    cpu.run();
 
     assert_eq!(cpu.register_x, 1)
   }
@@ -301,12 +300,18 @@ mod test {
   #[test]
   fn test_inx_sets_zero_flag() {
     let mut cpu = CPU::new();
-    cpu.register_x = 0xff;
+
     // inc 1 will overflow to zero
-    cpu.interpret(vec![0xe8, 0x00]);
+    cpu.load(vec![0xe8, 0x00]);
+    cpu.reset();
+
+    // set register at the tipping point
+    cpu.register_x = 0xff;
+
+    cpu.run();
 
     assert_eq!(cpu.status, 0b0000_0010);
-  }*/
+  }
 
   #[test]
   fn test_lda_from_memory() {
